@@ -1,6 +1,7 @@
 *.pyc
 *.tar.gz
 *.pth
+*.jpg
 data/
 output_cifar10/
 output_celeba/

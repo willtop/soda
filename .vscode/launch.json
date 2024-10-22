@@ -11,7 +11,7 @@
             "program": "${file}",
             "console": "integratedTerminal",
             "justMyCode": false,
-            "args": ["--config", "config/cifar10.yaml",
+            "args": ["--config", "config/celeba.yaml",
                      "--use_amp"],
             "env": {"PYTHONPATH": "${workspaceFolder}",
                     "RANK": "0",

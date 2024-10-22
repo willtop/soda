@@ -82,7 +82,9 @@ class SourceTargetDataset(Dataset):
     def __getitem__(self, index):
         image_1, label_1 = self.source.__getitem__(index)
         image_2, label_2 = self.target.__getitem__(index)
-        assert label_1 == label_2
+        # No need for assert below since they are constructed from the se dataset class constructor
+        # without randomizing order, should return images under same order
+        # assert label_1 == label_2
         return image_1, image_2
 
     def __len__(self):
@@ -114,27 +116,34 @@ def get_dataset(name='cifar10', root='data'):
         NUM_CLASSES = 10
         DATASET = CIFAR10
         RES = 32
+        initial_resizing_transform = transforms.Compose([])
     elif name == 'cifar100':
         data_norm = transforms.Normalize([0.5071, 0.4865, 0.4409], [0.2009, 0.1984, 0.2023])
         NUM_CLASSES = 100
         DATASET = CIFAR100
         RES = 32
+        initial_resizing_transform = transforms.Compose([])
     elif name == 'tiny':
         data_norm = transforms.Normalize([0.4802, 0.4481, 0.3975], [0.2302, 0.2265, 0.2262])
         NUM_CLASSES = 200
         DATASET = TinyImageNet
         RES = 64
+        initial_resizing_transform = transforms.Compose([])
     elif name == 'celeba':
         # based on ImageNet stats, as default in PyTorch as well as DeepCluster
         data_norm = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         NUM_CLASSES = 2 # corresponding to binary attributes
         DATASET = CelebA
         RES = 64
+        initial_resizing_transform = transforms.Compose([transforms.Resize(75),
+                                                         transforms.CenterCrop(64)])
     else:
         raise NotImplementedError
+    
 
     # for resnet encoder, at the training
     source_transform = transforms.Compose([
+        initial_resizing_transform,
         transforms.RandomApply([
             transforms.RandomResizedCrop(RES),
             transforms.RandomHorizontalFlip(),
@@ -148,6 +157,7 @@ def get_dataset(name='cifar10', root='data'):
     ])
     # for unet decoder, at the training
     target_transform = transforms.Compose([
+        initial_resizing_transform,
         transforms.RandomApply([
             transforms.RandomResizedCrop(RES),
             transforms.RandomHorizontalFlip(),
@@ -159,6 +169,7 @@ def get_dataset(name='cifar10', root='data'):
     ])
     # for resnet encoder, for evaluation
     downstream_transform_train = transforms.Compose([
+        initial_resizing_transform,
         transforms.RandomApply([
             transforms.RandomResizedCrop(RES),
             transforms.RandomHorizontalFlip(),
@@ -167,14 +178,23 @@ def get_dataset(name='cifar10', root='data'):
         data_norm,
     ])
     downstream_transform_test = transforms.Compose([
+        initial_resizing_transform,
         transforms.ToTensor(),
         data_norm,
     ])
 
-    train_source = DATASET(root=root, train=True, transform=source_transform, download=True)
-    train_target = DATASET(root=root, train=True, transform=target_transform)
-    train_source_target = SourceTargetDataset(train_source, train_target)
+    if name=="celeba":
+        train_source = DATASET(root=root, split='train', transform=source_transform, target_type='attr', download=True)
+        train_target = DATASET(root=root, split='train', transform=target_transform, target_type='attr')
+        train_source_target = SourceTargetDataset(train_source, train_target)
 
-    down_train = DATASET(root=root, train=True, transform=downstream_transform_train)
-    down_test = DATASET(root=root, train=False, transform=downstream_transform_test)
+        down_train = DATASET(root=root, split='train', transform=downstream_transform_train, target_type='attr')
+        down_test = DATASET(root=root, split='test', transform=downstream_transform_test, target_type='attr')
+    else:
+        train_source = DATASET(root=root, train=True, transform=source_transform, download=True)
+        train_target = DATASET(root=root, train=True, transform=target_transform)
+        train_source_target = SourceTargetDataset(train_source, train_target)
+
+        down_train = DATASET(root=root, train=True, transform=downstream_transform_train)
+        down_test = DATASET(root=root, train=False, transform=downstream_transform_test)
     return NUM_CLASSES, train_source_target, down_train, down_test

@@ -33,11 +33,11 @@ optim_args:
   betas: [0.9, 0.95]
 grad_clip_norm: 1
 
-n_epoch: 500
-warm_epoch: 20
+n_epoch: 100
+warm_epoch: 5 # originally 20 for cifar
 load_epoch: -1
 ema: 0.9999
 
 n_sample: 30
 save_dir: './output_celeba'
-save_per: 100
+save_per: 10 # originally 100 for cifar

@@ -7,7 +7,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import Dataset, DataLoader
 from sklearn.neighbors import KNeighborsClassifier
 
-from torchvision.datasets import CIFAR10, CIFAR100
+from torchvision.datasets import CIFAR10, CIFAR100, CelebA
 from datasets import TinyImageNet
 
 class FeatureDataset(Dataset):
@@ -18,6 +18,8 @@ class FeatureDataset(Dataset):
             self.gt = np.array(self.set.targets)
         elif isinstance(self.set, TinyImageNet):
             self.gt = np.array([label for _, label in self.set.data])
+        elif isinstance(self.set, CelebA):
+            self.gt = np.array([attrs for _, attrs in self.set])
         else:
             raise NotImplementedError
 
