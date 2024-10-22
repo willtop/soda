@@ -1,0 +1,6 @@
+*.pyc
+*.tar.gz
+*.pth
+data/
+output_cifar10/
+output_celeba/

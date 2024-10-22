@@ -162,7 +162,8 @@ def train(opt):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str)
-    parser.add_argument('--local_rank', default=-1, type=int,
+    # originally had default value as -1, however we should always have a GPU ready
+    parser.add_argument('--local_rank', default=0, type=int,
                         help='node rank for distributed training')
     parser.add_argument("--use_amp", action='store_true', default=False)
     opt = parser.parse_args()

@@ -4,11 +4,12 @@ from PIL import Image
 import torch
 from torch.utils.data import Dataset
 from torchvision import transforms
-from torchvision.datasets import CIFAR10, CIFAR100
+from torchvision.datasets import CIFAR10, CIFAR100, CelebA
 
 
+# add in download argument to be compatible with torchvision datasets
 class TinyImageNet(Dataset):
-    def __init__(self, root, train=True, transform=None):
+    def __init__(self, root, train=True, transform=None, download=None):
         if not root.endswith("tiny-imagenet-200"):
             root = os.path.join(root, "tiny-imagenet-200")
         self.train_dir = os.path.join(root, "train")
@@ -123,6 +124,12 @@ def get_dataset(name='cifar10', root='data'):
         NUM_CLASSES = 200
         DATASET = TinyImageNet
         RES = 64
+    elif name == 'celeba':
+        # based on ImageNet stats, as default in PyTorch as well as DeepCluster
+        data_norm = transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        NUM_CLASSES = 2 # corresponding to binary attributes
+        DATASET = CelebA
+        RES = 64
     else:
         raise NotImplementedError
 
@@ -164,7 +171,7 @@ def get_dataset(name='cifar10', root='data'):
         data_norm,
     ])
 
-    train_source = DATASET(root=root, train=True, transform=source_transform)
+    train_source = DATASET(root=root, train=True, transform=source_transform, download=True)
     train_target = DATASET(root=root, train=True, transform=target_transform)
     train_source_target = SourceTargetDataset(train_source, train_target)
 
