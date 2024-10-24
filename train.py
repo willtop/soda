@@ -2,6 +2,7 @@ import argparse
 import os
 from functools import partial
 
+import numpy as np
 import torch
 import torch.distributed as dist
 import yaml
@@ -22,6 +23,7 @@ def train(opt):
     yaml_path = opt.config
     local_rank = opt.local_rank
     use_amp = opt.use_amp
+    whether_latent_traverse = opt.latent_traverse
 
     with open(yaml_path, 'r') as f:
         opt = yaml.full_load(f)
@@ -68,6 +70,57 @@ def train(opt):
     optim = get_optimizer([{'params': soda.module.encoder.parameters(), 'lr': lr * opt.lrate_ratio},
                            {'params': soda.module.decoder.parameters(), 'lr': lr}], opt, lr=0)
     scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
+
+    # add in latent traverse visualization
+    if whether_latent_traverse:
+        # if finished whole training process
+        # latest_epoch = opt.n_epoch
+        latest_epoch = 60
+        target = os.path.join(model_dir, f"model_{latest_epoch}.pth")
+        print0("loading model at", target)
+        checkpoint = torch.load(target, map_location=device)
+        soda.load_state_dict(checkpoint['MODEL'])
+        if local_rank == 0:
+            ema.load_state_dict(checkpoint['EMA'])
+        ema_sample_method = ema.ema_model.ddim_sample
+        ema.ema_model.eval()
+        # randomly select two samples: source image and target image
+        start_img_id, end_img_id = np.random.choice(len(train), size=2, replace=False)
+        start_img, _ = train[start_img_id]
+        end_img, _ =  train[end_img_id]
+        with torch.no_grad():
+            start_z_guide = ema.ema_model.encode(start_img.unsqueeze(0).to(device), norm=False, use_amp=use_amp)
+            end_z_guide = ema.ema_model.encode(end_img.unsqueeze(0).to(device), norm=False, use_amp=use_amp)
+        assert start_z_guide.shape == end_z_guide.shape == (1, opt.encoder['feature_dim'])
+        start_z_guide, end_z_guide = start_z_guide.cpu().numpy().squeeze(), end_z_guide.cpu().numpy().squeeze()
+        # making a batch of z values, with each component changing gradually from start latent to end latent
+        latent_dims_to_traverse = np.random.choice(opt.encoder['feature_dim'], size=10, replace=False)
+        all_z_guides = []
+        for latent_dim in latent_dims_to_traverse:
+            latent_val_list = np.linspace(start=start_z_guide[latent_dim], 
+                                          stop=end_z_guide[latent_dim],
+                                          num=20,
+                                          endpoint=True)
+            for latent_val in latent_val_list:
+                z_guide = start_z_guide.copy()
+                z_guide[latent_dim] = latent_val
+                all_z_guides.append(z_guide)
+        all_z_guides = np.stack(all_z_guides, axis=0)
+        assert np.shape(all_z_guides) == (200, opt.encoder['feature_dim'])       
+
+        with torch.no_grad():
+            x_gen = ema_sample_method(200, start_img.shape, torch.tensor(all_z_guides).to(device))
+        grid = make_grid(x_gen.cpu(), nrow=20)
+        save_path = os.path.join(vis_dir, f"latent_traverse_ep{latest_epoch}_ema.png")
+        save_image(grid, save_path)
+
+        # save start and end image
+        x_orig = torch.stack([start_img, end_img])
+        grid = make_grid(x_orig, nrow=2)
+        save_image(grid, os.path.join(vis_dir, "latent_traverse_start_finish.png"))
+        print('latent_traverse_finished')
+        return 
+
 
     if opt.load_epoch != -1:
         target = os.path.join(model_dir, f"model_{opt.load_epoch}.pth")
@@ -125,7 +178,7 @@ def train(opt):
             else:
                 continue
 
-            if ep > 0:
+            if ep > 0 and ep % opt.eval_per == 0:
                 print(f'epoch {ep}, evaluating:')
                 soda.eval()
                 feat_func = partial(ema.ema_model.encode, norm=True, use_amp=use_amp)
@@ -159,6 +212,7 @@ def train(opt):
             print('saved model at', save_path)
 
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str)
@@ -166,6 +220,7 @@ if __name__ == "__main__":
     parser.add_argument('--local_rank', default=0, type=int,
                         help='node rank for distributed training')
     parser.add_argument("--use_amp", action='store_true', default=False)
+    parser.add_argument("--latent_traverse", action='store_true', default=False)
     opt = parser.parse_args()
     print0(opt)
 
@@ -173,3 +228,5 @@ if __name__ == "__main__":
     dist.init_process_group(backend='nccl')
     torch.cuda.set_device(opt.local_rank)
     train(opt)
+
+    print("Main script finished!")

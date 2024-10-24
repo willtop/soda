@@ -4,7 +4,7 @@ dataset: 'celeba'
 # model params
 encoder:
   arch: 'resnet18'
-  feature_dim: 128
+  feature_dim: 32
   cifar_small_image: True
 
 decoder:
@@ -15,7 +15,7 @@ decoder:
   dropout: 0.1
   n_blocks: 2
   use_res_for_updown: False
-  z_channels: 128
+  z_channels: 32
 
 diffusion:
   betas: [1.0e-4, 0.02]
@@ -40,4 +40,5 @@ ema: 0.9999
 
 n_sample: 30
 save_dir: './output_celeba'
-save_per: 10 # originally 100 for cifar
+save_per: 5 # originally 100 for cifar
+eval_per: 100 # for omniglot skip eval for now
